@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Among Us — Lista de Espera</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --red: #e84040; --red-dark: #b02020;
+    --space: #0a0c1a; --space2: #111428; --space3: #1a1e38;
+    --accent: #7c3aed; --accent2: #a855f7;
+    --teal: #06b6d4; --yellow: #fbbf24; --green: #22c55e;
+    --text: #e2e8f0; --text2: #94a3b8;
+    --glass: rgba(255,255,255,0.05); --glass-border: rgba(255,255,255,0.1);
+  }
+
+  body {
+    background: var(--space); color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh; overflow-x: hidden;
+  }
+
+  .stars {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, white, transparent),
+      radial-gradient(1px 1px at 80% 10%, white, transparent),
+      radial-gradient(1px 1px at 50% 60%, rgba(255,255,255,0.6), transparent),
+      radial-gradient(1px 1px at 10% 80%, white, transparent),
+      radial-gradient(1px 1px at 90% 50%, rgba(255,255,255,0.8), transparent),
+      radial-gradient(1px 1px at 30% 90%, white, transparent),
+      radial-gradient(1px 1px at 70% 70%, rgba(255,255,255,0.5), transparent),
+      radial-gradient(1px 1px at 40% 20%, white, transparent),
+      radial-gradient(1px 1px at 60% 40%, rgba(255,255,255,0.7), transparent),
+      radial-gradient(1px 1px at 15% 50%, white, transparent),
+      radial-gradient(1.5px 1.5px at 85% 80%, rgba(124,58,237,0.8), transparent),
+      radial-gradient(1.5px 1.5px at 25% 15%, rgba(6,182,212,0.6), transparent);
+    background-size: 300px 300px, 400px 400px, 500px 500px, 350px 350px, 450px 450px,
+                     320px 320px, 480px 480px, 360px 360px, 420px 420px, 390px 390px, 280px 280px, 440px 440px;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 860px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  header { text-align: center; padding: 40px 0 28px; }
+
+  .crewmate-logo { width: 80px; height: 80px; margin: 0 auto 16px; animation: float 3s ease-in-out infinite; display: block; }
+
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+
+  h1 {
+    font-family: 'Orbitron', monospace; font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 900;
+    background: linear-gradient(135deg, var(--accent2), var(--teal));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    letter-spacing: 3px;
+  }
+
+  .subtitle { color: var(--text2); font-size: 1rem; margin-top: 6px; letter-spacing: 1px; }
+
+  .slots-counter { display: flex; align-items: center; justify-content: center; margin: 18px 0; }
+
+  .slot-pill {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 50px; padding: 8px 22px;
+    font-family: 'Orbitron', monospace; font-size: 0.85rem; color: var(--teal);
+  }
+  .slot-pill span { color: var(--yellow); font-weight: 700; }
+
+  /* TABS */
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--space2); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 4px; margin-bottom: 22px;
+  }
+
+  .tab-btn {
+    flex: 1; padding: 10px; background: transparent; border: none; border-radius: 8px;
+    color: var(--text2); font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+  }
+  .tab-btn.active { background: var(--accent); color: white; }
+  .tab-btn:hover:not(.active) { background: var(--glass); color: var(--text); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* CARD */
+  .card {
+    background: var(--glass); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 22px; margin-bottom: 20px;
+  }
+
+  .card h2 {
+    font-family: 'Orbitron', monospace; font-size: 0.9rem;
+    color: var(--accent2); letter-spacing: 1px; margin-bottom: 16px; text-transform: uppercase;
+  }
+
+  /* INPUTS */
+  input[type=text], input[type=password] {
+    width: 100%; background: var(--space2); border: 1px solid var(--glass-border);
+    border-radius: 10px; padding: 12px 16px; color: var(--text);
+    font-family: 'Rajdhani', sans-serif; font-size: 1.1rem; margin-bottom: 12px;
+    outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--text2); }
+
+  /* COLORS */
+  .colors-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+
+  .color-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; padding: 8px 4px; border-radius: 10px;
+    border: 2px solid transparent; transition: all 0.2s; background: var(--space2);
+  }
+  .color-opt:hover { border-color: var(--glass-border); transform: scale(1.05); }
+  .color-opt.selected { border-color: var(--accent2); background: rgba(124,58,237,0.2); }
+  .color-opt.taken { opacity: 0.35; cursor: not-allowed; }
+
+  .color-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); }
+  .color-label { font-size: 0.6rem; color: var(--text2); text-align: center; }
+
+  /* BUTTONS */
+  .btn {
+    width: 100%; padding: 13px; border-radius: 12px; border: none;
+    font-family: 'Orbitron', monospace; font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; letter-spacing: 1px; transition: all 0.2s;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; }
+  .btn-primary:hover { transform: translateY(-2px); filter: brightness(1.1); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-danger { background: linear-gradient(135deg, var(--red-dark), var(--red)); color: white; }
+  .btn-danger:hover { transform: translateY(-2px); filter: brightness(1.1); }
+  .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-teal { background: linear-gradient(135deg, #0e7490, var(--teal)); color: white; margin-top: 8px; }
+  .btn-outline {
+    background: none; border: 1px solid var(--glass-border); color: var(--text2);
+    border-radius: 8px; padding: 8px 16px; cursor: pointer;
+    font-family: 'Rajdhani', sans-serif; font-size: 0.9rem; margin-top: 8px;
+    transition: all 0.2s; width: 100%;
+  }
+  .btn-outline:hover { border-color: var(--red); color: var(--red); background: rgba(232,64,64,0.1); }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+
+  .stat-box {
+    background: var(--space2); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 14px; text-align: center;
+  }
+  .stat-val { font-family: 'Orbitron', monospace; font-size: 1.8rem; font-weight: 700; color: var(--accent2); }
+  .stat-lbl { font-size: 0.8rem; color: var(--text2); margin-top: 2px; }
+
+  /* LIST ITEMS */
+  .waitlist-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 14px; background: var(--space2); border: 1px solid var(--glass-border);
+    border-radius: 12px; margin-bottom: 8px; transition: all 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:translateX(0)} }
+  .waitlist-item:hover { border-color: var(--accent); background: rgba(124,58,237,0.08); }
+
+  .item-num {
+    width: 28px; height: 28px; background: var(--space3); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; color: var(--text2); flex-shrink: 0;
+  }
+
+  .crewmate-mini {
+    width: 22px; height: 28px; border-radius: 11px 11px 6px 6px;
+    position: relative; flex-shrink: 0;
+  }
+  .crewmate-mini::after {
+    content: ''; position: absolute; top: 6px; left: 4px;
+    width: 14px; height: 8px; background: rgba(255,255,255,0.25); border-radius: 4px;
+  }
+
+  .item-info { flex: 1; min-width: 0; }
+  .item-name { font-weight: 700; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item-time { font-size: 0.78rem; color: var(--text2); }
+
+  .item-badge { font-size: 0.68rem; padding: 3px 10px; border-radius: 20px; font-weight: 700; letter-spacing: 0.5px; white-space: nowrap; }
+  .badge-wait { background: rgba(124,58,237,0.25); color: var(--accent2); border: 1px solid var(--accent); }
+  .badge-in { background: rgba(34,197,94,0.25); color: var(--green); border: 1px solid var(--green); }
+  .badge-out { background: rgba(100,116,139,0.15); color: var(--text2); border: 1px solid var(--glass-border); }
+
+  /* WINNERS */
+  .winner-card {
+    background: linear-gradient(135deg, rgba(124,58,237,0.25), rgba(6,182,212,0.2));
+    border: 1px solid var(--accent); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 12px;
+    animation: winPop 0.4s ease;
+  }
+  @keyframes winPop { from{transform:scale(0.85);opacity:0} 60%{transform:scale(1.04)} to{transform:scale(1);opacity:1} }
+
+  .winner-num {
+    width: 30px; height: 30px; background: var(--yellow); color: var(--space);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 0.8rem; font-family: 'Orbitron', monospace; flex-shrink: 0;
+  }
+
+  .confetti-bar {
+    height: 4px; border-radius: 4px; margin: 14px 0;
+    background: linear-gradient(90deg, var(--accent), var(--teal), var(--yellow), var(--red), var(--green));
+    background-size: 300% 100%; animation: shimmer 2s linear infinite;
+  }
+  @keyframes shimmer { 0%{background-position:0% 0%} 100%{background-position:300% 0%} }
+
+  /* ALERTS */
+  .alert {
+    padding: 12px 16px; border-radius: 10px; margin-bottom: 14px;
+    font-weight: 600; font-size: 0.9rem; animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .alert-success { background: rgba(34,197,94,0.15); border: 1px solid var(--green); color: var(--green); }
+  .alert-error { background: rgba(232,64,64,0.15); border: 1px solid var(--red); color: #f87171; }
+  .alert-info { background: rgba(124,58,237,0.15); border: 1px solid var(--accent); color: var(--accent2); }
+
+  /* ADMIN */
+  .admin-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .admin-row input { margin-bottom: 0; flex: 1; }
+  .admin-row .btn { width: auto; padding: 12px 18px; font-size: 0.8rem; }
+
+  .delete-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text2); font-size: 1.1rem; padding: 4px 8px;
+    border-radius: 6px; transition: all 0.2s; flex-shrink: 0;
+  }
+  .delete-btn:hover { background: rgba(232,64,64,0.2); color: var(--red); }
+
+  .sep { height: 1px; background: var(--glass-border); margin: 18px 0; }
+
+  .empty-state { text-align: center; padding: 36px 20px; color: var(--text2); }
+  .empty-state .icon { font-size: 2.8rem; margin-bottom: 10px; }
+
+  /* LOADING */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 30px; color: var(--text2); font-size: 0.9rem;
+  }
+  .spin {
+    width: 20px; height: 20px; border: 2px solid var(--glass-border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* CONNECTION STATUS */
+  .conn-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 6px;
+  }
+  .conn-ok { background: var(--green); }
+  .conn-err { background: var(--red); }
+  .conn-loading { background: var(--yellow); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .conn-bar {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; color: var(--text2); margin-bottom: 16px; gap: 4px;
+  }
+</style>
+</head>
+<body>
+<div class="stars"></div>
+<div class="app">
+
+<header>
+  <svg class="crewmate-logo" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="40" cy="50" rx="24" ry="22" fill="#7c3aed"/>
+    <ellipse cx="40" cy="34" rx="20" ry="20" fill="#7c3aed"/>
+    <rect x="20" y="34" width="40" height="16" fill="#7c3aed"/>
+    <ellipse cx="40" cy="26" rx="12" ry="10" fill="#a5f3fc" opacity="0.85"/>
+    <path d="M16 54 Q10 60 12 68 L28 68 Q28 58 24 54 Z" fill="#7c3aed"/>
+    <path d="M64 54 Q70 60 68 68 L52 68 Q52 58 56 54 Z" fill="#7c3aed"/>
+  </svg>
+  <h1>AMONG US</h1>
+  <div class="subtitle">LISTA DE ESPERA — SKELD EDITION</div>
+  <div class="conn-bar">
+    <span class="conn-dot conn-loading" id="conn-dot"></span>
+    <span id="conn-status">Conectando a base de datos...</span>
+  </div>
+  <div class="slots-counter">
+    <div class="slot-pill">Slots disponibles: <span id="slots-left">—</span> / 15</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" id="tab-btn-register" onclick="showTab('register',this)">Anotarse</button>
+  <button class="tab-btn" id="tab-btn-waitlist" onclick="showTab('waitlist',this)">Lista</button>
+  <button class="tab-btn" id="tab-btn-admin" onclick="showTab('admin',this)">Admin</button>
+</div>
+
+<!-- TAB: REGISTER -->
+<div id="tab-register" class="tab-content active">
+  <div id="alert-reg"></div>
+  <div class="card">
+    <h2>Unirse a la lista</h2>
+    <input type="text" id="nick" placeholder="Tu nombre / nick" maxlength="20">
+    <div style="color:var(--text2);font-size:0.9rem;margin-bottom:8px;">Elegí tu color:</div>
+    <div class="colors-grid" id="colors-grid"></div>
+    <button class="btn btn-primary" id="reg-btn" onclick="register()">ANOTARME</button>
+  </div>
+</div>
+
+<!-- TAB: WAITLIST -->
+<div id="tab-waitlist" class="tab-content">
+  <div class="stats-grid">
+    <div class="stat-box"><div class="stat-val" id="stat-total">—</div><div class="stat-lbl">Anotados</div></div>
+    <div class="stat-box"><div class="stat-val" id="stat-slots" style="color:var(--green)">—</div><div class="stat-lbl">Slots libres</div></div>
+    <div class="stat-box"><div class="stat-val" id="stat-wait" style="color:var(--yellow)">—</div><div class="stat-lbl">En espera</div></div>
+  </div>
+  <div id="waitlist-container"><div class="loading"><div class="spin"></div>Cargando lista...</div></div>
+</div>
+
+<!-- TAB: ADMIN -->
+<div id="tab-admin" class="tab-content">
+  <div id="admin-locked">
+    <div class="card">
+      <h2>Acceso Admin</h2>
+      <div class="admin-row">
+        <input type="password" id="admin-pass" placeholder="Contraseña" onkeydown="if(event.key==='Enter')adminLogin()">
+        <button class="btn btn-primary" onclick="adminLogin()">ENTRAR</button>
+      </div>
+      <div id="alert-admin-login"></div>
+    </div>
+  </div>
+
+  <div id="admin-panel" style="display:none">
+    <div id="alert-admin"></div>
+    <div class="stats-grid">
+      <div class="stat-box"><div class="stat-val" id="a-stat-total">—</div><div class="stat-lbl">Anotados</div></div>
+      <div class="stat-box"><div class="stat-val" id="a-stat-slots" style="color:var(--green)">—</div><div class="stat-lbl">Slots libres</div></div>
+      <div class="stat-box"><div class="stat-val" id="a-stat-wait" style="color:var(--yellow)">—</div><div class="stat-lbl">En espera</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Hacer Sorteo</h2>
+      <p style="color:var(--text2);font-size:0.9rem;margin-bottom:14px;">Se sortean aleatoriamente 15 slots entre todos los anotados.</p>
+      <button class="btn btn-danger" id="raffle-btn" onclick="doRaffle()" style="font-size:1.1rem;margin-bottom:0">SORTEAR AHORA</button>
+      <button class="btn btn-teal" onclick="copyWinners()">COPIAR LISTA DE GANADORES</button>
+      <div id="winners-container"></div>
+    </div>
+
+    <div class="card">
+      <h2>Lista completa</h2>
+      <div id="admin-list"><div class="loading"><div class="spin"></div>Cargando...</div></div>
+      <div class="sep"></div>
+      <button class="btn-outline" onclick="resetAll()">RESETEAR LISTA COMPLETA</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+
+const SUPABASE_URL = 'https://tdpzavudfgrtwnvvwpio.supabase.co';
+const SUPABASE_KEY = 'sb_secret_Ps3IJSkOvkS4dyxIzwx_rQ_ii12hBqN';
+
+
+const TOTAL_SLOTS = 15;
+const ADMIN_PASSWORD = 'pichoncito';
+
+const COLORS = [
+  {name:'Rojo',     hex:'#e84040'}, {name:'Azul',    hex:'#3b82f6'},
+  {name:'Verde',    hex:'#22c55e'}, {name:'Rosa',     hex:'#ec4899'},
+  {name:'Naranja',  hex:'#f97316'}, {name:'Amarillo', hex:'#fbbf24'},
+  {name:'Negro',    hex:'#374151'}, {name:'Blanco',   hex:'#e5e7eb'},
+  {name:'Violeta',  hex:'#a855f7'}, {name:'Marrón',   hex:'#92400e'},
+  {name:'Cyan',     hex:'#06b6d4'}, {name:'Lima',     hex:'#84cc16'},
+  {name:'Café',     hex:'#b45309'}, {name:'Coral',    hex:'#fb7185'},
+  {name:'Aqua',     hex:'#2dd4bf'},
+];
+
+let sb, selectedColor = null, adminLoggedIn = false;
+let currentList = [], winners = [];
+let realtime = null;
+
+// --- INIT ---
+async function init() {
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    await loadAll();
+    setConn(true);
+    subscribeRealtime();
+  } catch(e) {
+    setConn(false);
+    console.error(e);
+  }
+}
+
+function setConn(ok) {
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-status');
+  dot.className = 'conn-dot ' + (ok ? 'conn-ok' : 'conn-err');
+  txt.textContent = ok ? 'Conectado a Supabase' : 'Error de conexión — revisá las credenciales';
+}
+
+// --- SUPABASE CRUD ---
+async function loadAll() {
+  const { data, error } = await sb.from('waitlist').select('*').order('created_at', { ascending: true });
+  if (error) throw error;
+  currentList = data || [];
+  const { data: wdata } = await sb.from('winners').select('waitlist_id');
+  winners = wdata ? wdata.map(w => w.waitlist_id) : [];
+  updateUI();
+}
+
+async function insertPlayer(name, color, colorName) {
+  const { error } = await sb.from('waitlist').insert({ name, color, color_name: colorName });
+  if (error) throw error;
+}
+
+async function deletePlayer(id) {
+  await sb.from('winners').delete().eq('waitlist_id', id);
+  const { error } = await sb.from('waitlist').delete().eq('id', id);
+  if (error) throw error;
+}
+
+async function saveWinners(ids) {
+  await sb.from('winners').delete().neq('id', 0);
+  if (ids.length > 0) {
+    const rows = ids.map(id => ({ waitlist_id: id }));
+    await sb.from('winners').insert(rows);
+  }
+}
+
+async function clearAll() {
+  await sb.from('winners').delete().neq('id', 0);
+  await sb.from('waitlist').delete().neq('id', 0);
+}
+
+// --- REALTIME ---
+function subscribeRealtime() {
+  if (realtime) sb.removeChannel(realtime);
+  realtime = sb.channel('waitlist-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'waitlist' }, () => loadAll())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'winners' }, () => loadAll())
+    .subscribe();
+}
+
+// --- UI ---
+function updateUI() {
+  const total = currentList.length;
+  const slotsLeft = Math.max(0, TOTAL_SLOTS - total);
+  const waiting = Math.max(0, total - TOTAL_SLOTS);
+
+  document.getElementById('slots-left').textContent = slotsLeft;
+  ['stat-total','a-stat-total'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).textContent = total; });
+  ['stat-slots','a-stat-slots'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).textContent = slotsLeft; });
+  ['stat-wait','a-stat-wait'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).textContent = waiting; });
+
+  renderWaitlist();
+  buildColorGrid();
+  if (adminLoggedIn) { renderAdminList(); renderWinnersPanel(); }
+}
+
+function renderWaitlist() {
+  const container = document.getElementById('waitlist-container');
+  if (currentList.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🚀</div><p>Nadie se anotó todavía.<br>¡Sé el primero!</p></div>`;
+    return;
+  }
+  container.innerHTML = currentList.map((p, i) => {
+    const isWinner = winners.includes(p.id);
+    const badge = winners.length > 0
+      ? (isWinner ? '<span class="item-badge badge-in">EN JUEGO</span>' : '<span class="item-badge badge-out">FUERA</span>')
+      : '<span class="item-badge badge-wait">EN ESPERA</span>';
+    const time = new Date(p.created_at).toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
+    return `<div class="waitlist-item">
+      <div class="item-num">${i+1}</div>
+      <div class="crewmate-mini" style="background:${p.color}"></div>
+      <div class="item-info">
+        <div class="item-name">${esc(p.name)}</div>
+        <div class="item-time">${esc(p.color_name)} · ${time}</div>
+      </div>
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function renderAdminList() {
+  const container = document.getElementById('admin-list');
+  if (currentList.length === 0) {
+    container.innerHTML = `<div style="color:var(--text2);text-align:center;padding:20px">No hay jugadores.</div>`;
+    return;
+  }
+  container.innerHTML = currentList.map((p, i) => {
+    const time = new Date(p.created_at).toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
+    return `<div class="waitlist-item">
+      <div class="item-num">${i+1}</div>
+      <div class="crewmate-mini" style="background:${p.color}"></div>
+      <div class="item-info">
+        <div class="item-name">${esc(p.name)}</div>
+        <div class="item-time">${esc(p.color_name)} · ${time}</div>
+      </div>
+      <button class="delete-btn" onclick="removePlayer(${p.id},'${esc(p.name)}')" title="Eliminar">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function renderWinnersPanel() {
+  const container = document.getElementById('winners-container');
+  if (winners.length === 0) { container.innerHTML = ''; return; }
+  const winnerPlayers = winners.map(id => currentList.find(p => p.id === id)).filter(Boolean);
+  container.innerHTML = `<div class="confetti-bar"></div>
+    <div style="font-family:'Orbitron',monospace;color:var(--yellow);font-size:0.85rem;letter-spacing:1px;margin-bottom:10px;margin-top:16px;">JUGADORES SELECCIONADOS</div>
+    ${winnerPlayers.map((p,i) => `<div class="winner-card">
+      <div class="winner-num">${i+1}</div>
+      <div class="crewmate-mini" style="background:${p.color}"></div>
+      <div class="item-info">
+        <div class="item-name">${esc(p.name)}</div>
+        <div class="item-time" style="color:var(--accent2)">${esc(p.color_name)}</div>
+      </div>
+    </div>`).join('')}`;
+}
+
+function buildColorGrid() {
+  const grid = document.getElementById('colors-grid');
+  const takenColors = currentList.map(p => p.color);
+  grid.innerHTML = COLORS.map((c, i) => {
+    const taken = takenColors.includes(c.hex) && !(selectedColor && selectedColor.hex === c.hex);
+    return `<div class="color-opt${taken?' taken':''}${selectedColor&&selectedColor.hex===c.hex?' selected':''}" 
+      onclick="${taken?'':'selectColor('+i+')'}" data-i="${i}">
+      <div class="color-swatch" style="background:${c.hex}"></div>
+      <div class="color-label">${c.name}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectColor(i) {
+  selectedColor = COLORS[i];
+  buildColorGrid();
+}
+
+// --- ACTIONS ---
+async function register() {
+  const nick = document.getElementById('nick').value.trim();
+  if (!nick) { showAlert('alert-reg','Ingresá tu nombre/nick.','error'); return; }
+  if (!selectedColor) { showAlert('alert-reg','Elegí un color.','error'); return; }
+
+  const exists = currentList.find(p => p.name.toLowerCase() === nick.toLowerCase());
+  if (exists) { showAlert('alert-reg','Ya existe un jugador con ese nombre.','error'); return; }
+
+  const colorTaken = currentList.find(p => p.color === selectedColor.hex);
+  if (colorTaken) { showAlert('alert-reg',`El color ${selectedColor.name} ya está tomado.`,'error'); return; }
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'ANOTANDO...';
+
+  try {
+    await insertPlayer(nick, selectedColor.hex, selectedColor.name);
+    document.getElementById('nick').value = '';
+    selectedColor = null;
+    showAlert('alert-reg', `¡${nick} se anotó! Quedate atento al sorteo.`, 'success');
+  } catch(e) {
+    showAlert('alert-reg', 'Error al conectar. Revisá las credenciales de Supabase.', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'ANOTARME';
+  }
+}
+
+async function removePlayer(id, name) {
+  if (!confirm(`¿Eliminar a ${name}?`)) return;
+  try {
+    await deletePlayer(id);
+  } catch(e) {
+    showAlert('alert-admin', 'Error al eliminar.', 'error');
+  }
+}
+
+async function doRaffle() {
+  if (currentList.length === 0) { showAlert('alert-admin','No hay jugadores para sortear.','error'); return; }
+  const btn = document.getElementById('raffle-btn');
+  btn.disabled = true; btn.textContent = 'SORTEANDO...';
+
+  const shuffled = [...currentList].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, Math.min(TOTAL_SLOTS, currentList.length));
+
+  try {
+    await saveWinners(selected.map(p => p.id));
+    showAlert('alert-admin', `¡Sorteo listo! ${selected.length} jugadores seleccionados.`, 'success');
+  } catch(e) {
+    showAlert('alert-admin', 'Error al guardar el sorteo.', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'SORTEAR NUEVAMENTE';
+  }
+}
+
+function copyWinners() {
+  if (winners.length === 0) { showAlert('alert-admin','Hacé el sorteo primero.','error'); return; }
+  const names = winners.map(id => currentList.find(p => p.id === id)?.name).filter(Boolean);
+  const text = `AMONG US — Ganadores del sorteo:\n${names.map((n,i)=>`${i+1}. ${n}`).join('\n')}`;
+  navigator.clipboard.writeText(text).then(() => showAlert('alert-admin','Ganadores copiados al portapapeles.','success'));
+}
+
+async function resetAll() {
+  if (!confirm('¿Resetear TODA la lista y el sorteo? No se puede deshacer.')) return;
+  try {
+    await clearAll();
+    showAlert('alert-admin', 'Lista reseteada.', 'info');
+  } catch(e) {
+    showAlert('alert-admin', 'Error al resetear.', 'error');
+  }
+}
+
+function adminLogin() {
+  const pass = document.getElementById('admin-pass').value;
+  if (pass === ADMIN_PASSWORD) {
+    adminLoggedIn = true;
+    document.getElementById('admin-locked').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    updateUI();
+  } else {
+    showAlert('alert-admin-login', 'Contraseña incorrecta. Pista: son impostores 😈', 'error');
+  }
+}
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  setTimeout(() => el.innerHTML = '', 4000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+buildColorGrid();
+init();
+</script>
+</body>
+</html>
